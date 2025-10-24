@@ -127,4 +127,26 @@ public class DBHelper {
             System.err.println("✗ Error closing connection: " + e.getMessage());
         }
     }
+        /**
+     * Execute a simple SQL SELECT query
+     * @param sql SQL query string
+     * @return ResultSet containing query results
+     * @throws SQLException if query fails
+     */
+    public static ResultSet executeQuery(String sql) throws SQLException {
+        Statement stmt = getConnection().createStatement();
+        return stmt.executeQuery(sql);
+    }
+
+    /**
+     * Execute an INSERT/UPDATE/DELETE SQL statement
+     * @param sql SQL update string
+     * @return number of affected rows
+     * @throws SQLException if execution fails
+     */
+    public static int executeUpdate(String sql) throws SQLException {
+        Statement stmt = getConnection().createStatement();
+        return stmt.executeUpdate(sql);
+    }
+
 }

@@ -1,399 +1,239 @@
 package sims.view;
 
+import sims.controller.DBHelper;
+import sims.model.Grade;
 import sims.controller.GradeManager;
 import sims.controller.StudentManager;
 import sims.controller.CourseManager;
-import sims.model.Grade;
-import sims.model.Student;
-import sims.model.Course;
+
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.awt.event.*;
+import java.sql.*;
 import java.util.ArrayList;
 
-/**
- * Grade Management Panel with CRUD operations (Manual Code)
- */
 public class GradePanel extends JPanel {
-    
+
+    private JTable table;
+    private DefaultTableModel tableModel;
+    private JTextField txtScore;
+    private JComboBox<String> cmbStudentID, cmbCourseID;
     private GradeManager gradeManager;
     private StudentManager studentManager;
     private CourseManager courseManager;
-    
-    // Input fields
-    private JComboBox<String> cmbStudentID;
-    private JComboBox<String> cmbCourseID;
-    private JTextField txtScore;
-    
-    // Buttons
-    private JButton btnAdd;
-    private JButton btnUpdate;
-    private JButton btnDelete;
-    private JButton btnSearch;
-    private JButton btnRefresh;
-    private JButton btnClear;
-    private JButton btnFilterStudent;
-    private JButton btnFilterCourse;
-    
-    // Table
-    private JTable table;
-    private DefaultTableModel tableModel;
-    
+
     public GradePanel() {
-        // 初始化 Manager
-        // (重要：这些 Manager 必须是为 GUI 重构过的版本)
+        setLayout(new BorderLayout());
+
         gradeManager = new GradeManager();
         studentManager = new StudentManager();
         courseManager = new CourseManager();
-        
-        initComponents();
-        loadComboBoxData();
-        loadTableData(gradeManager.getAllGrades()); // 初始加载所有数据
-    }
-    
-    private void initComponents() {
-        setLayout(new BorderLayout(10, 10));
-        setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        
-        // Input panel (North)
-        add(createInputPanel(), BorderLayout.NORTH);
-        
-        // Table panel (Center)
-        add(createTablePanel(), BorderLayout.CENTER);
-        
-        // Button panel (South)
-        add(createButtonPanel(), BorderLayout.SOUTH);
-    }
-    
-    private JPanel createInputPanel() {
-        JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBorder(BorderFactory.createTitledBorder("Grade Information"));
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.insets = new Insets(5, 5, 5, 5);
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        
-        // Student ID
-        gbc.gridx = 0; gbc.gridy = 0;
-        panel.add(new JLabel("Student ID:"), gbc);
-        gbc.gridx = 1;
-        cmbStudentID = new JComboBox<>();
-        cmbStudentID.setEditable(true); // 允许输入ID进行搜索
-        panel.add(cmbStudentID, gbc);
-        
-        // Course ID
-        gbc.gridx = 2; gbc.gridy = 0;
-        panel.add(new JLabel("Course ID:"), gbc);
-        gbc.gridx = 3;
-        cmbCourseID = new JComboBox<>();
-        cmbCourseID.setEditable(true); // 允许输入ID进行搜索
-        panel.add(cmbCourseID, gbc);
-        
-        // Score
-        gbc.gridx = 0; gbc.gridy = 1;
-        panel.add(new JLabel("Score:"), gbc);
-        gbc.gridx = 1;
-        txtScore = new JTextField(20);
-        panel.add(txtScore, gbc);
-        
-        // Refresh button for combo boxes
-        gbc.gridx = 2; gbc.gridy = 1;
-        JButton btnRefreshData = new JButton("Refresh Lists");
-        btnRefreshData.addActionListener(e -> loadComboBoxData());
-        panel.add(btnRefreshData, gbc);
-        
-        return panel;
-    }
-    
-    private JScrollPane createTablePanel() {
-        String[] columns = {"Student ID", "Course ID", "Score"};
-        tableModel = new DefaultTableModel(columns, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
-            }
-        };
-        
+
+        // === 顶部操作区 ===
+        JPanel topPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JButton btnAdd = new JButton("Add");
+        JButton btnUpdate = new JButton("Update");
+        JButton btnDelete = new JButton("Delete");
+        JButton btnRefresh = new JButton("Refresh");
+        JButton btnFilterStu = new JButton("Filter by Student");
+        JButton btnFilterCourse = new JButton("Filter by Course");
+
+        topPanel.add(btnAdd);
+        topPanel.add(btnUpdate);
+        topPanel.add(btnDelete);
+        topPanel.add(btnRefresh);
+        topPanel.add(btnFilterStu);
+        topPanel.add(btnFilterCourse);
+        add(topPanel, BorderLayout.NORTH);
+
+        // === 表格区 ===
+        tableModel = new DefaultTableModel(new Object[]{"Student ID", "Course ID", "Score"}, 0);
         table = new JTable(tableModel);
-        table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        table.getTableHeader().setReorderingAllowed(false);
-        
-        // Add selection listener
-        table.getSelectionModel().addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting() && table.getSelectedRow() != -1) {
-                fillFieldsFromTable();
-            }
-        });
-        
-        return new JScrollPane(table);
-    }
-    
-    private JPanel createButtonPanel() {
-        JPanel panel = new JPanel(new BorderLayout());
-        
-        // Main buttons
-        JPanel mainButtons = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
-        
-        btnAdd = new JButton("Add");
-        btnUpdate = new JButton("Update");
-        btnDelete = new JButton("Delete");
-        btnSearch = new JButton("Search");
-        btnRefresh = new JButton("Refresh All");
-        btnClear = new JButton("Clear");
-        
-        // Add action listeners
+        add(new JScrollPane(table), BorderLayout.CENTER);
+
+        // === 底部编辑区 ===
+        JPanel bottomPanel = new JPanel(new GridLayout(2, 3, 5, 5));
+        cmbStudentID = new JComboBox<>();
+        cmbCourseID = new JComboBox<>();
+        txtScore = new JTextField();
+
+        bottomPanel.add(new JLabel("Student ID:"));
+        bottomPanel.add(new JLabel("Course ID:"));
+        bottomPanel.add(new JLabel("Score:"));
+        bottomPanel.add(cmbStudentID);
+        bottomPanel.add(cmbCourseID);
+        bottomPanel.add(txtScore);
+        add(bottomPanel, BorderLayout.SOUTH);
+
+        // === 初始化 ===
+        loadComboBoxData();
+        loadTableData();
+
+        // === 事件绑定 ===
         btnAdd.addActionListener(e -> addGrade());
         btnUpdate.addActionListener(e -> updateGrade());
         btnDelete.addActionListener(e -> deleteGrade());
-        btnSearch.addActionListener(e -> searchGrade());
-        btnRefresh.addActionListener(e -> loadTableData(gradeManager.getAllGrades()));
-        btnClear.addActionListener(e -> clearFields());
-        
-        mainButtons.add(btnAdd);
-        mainButtons.add(btnUpdate);
-        mainButtons.add(btnDelete);
-        mainButtons.add(btnSearch);
-        mainButtons.add(btnRefresh);
-        mainButtons.add(btnClear);
-        
-        // Filter buttons
-        JPanel filterButtons = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
-        
-        btnFilterStudent = new JButton("Filter by Student");
-        btnFilterCourse = new JButton("Filter by Course");
-        
-        btnFilterStudent.addActionListener(e -> filterByStudent());
+        btnRefresh.addActionListener(e -> loadTableData());
+        btnFilterStu.addActionListener(e -> filterByStudent());
         btnFilterCourse.addActionListener(e -> filterByCourse());
-        
-        filterButtons.add(btnFilterStudent);
-        filterButtons.add(btnFilterCourse);
-        
-        panel.add(mainButtons, BorderLayout.NORTH);
-        panel.add(filterButtons, BorderLayout.SOUTH);
-        
-        return panel;
+        table.addMouseListener(new MouseAdapter() {
+            public void mouseClicked(MouseEvent e) {
+                int row = table.getSelectedRow();
+                if (row >= 0) {
+                    cmbStudentID.setSelectedItem(tableModel.getValueAt(row, 0).toString());
+                    cmbCourseID.setSelectedItem(tableModel.getValueAt(row, 1).toString());
+                    txtScore.setText(tableModel.getValueAt(row, 2).toString());
+                }
+            }
+        });
     }
-    
-    // --- (这里是您缺失的代码) ---
 
-    /**
-     * Fills the input fields with data from the selected table row
-     */
-    private void fillFieldsFromTable() {
-        int row = table.getSelectedRow();
-        if (row == -1) return;
-        
-        cmbStudentID.setSelectedItem(table.getValueAt(row, 0).toString());
-        cmbCourseID.setSelectedItem(table.getValueAt(row, 1).toString());
-        txtScore.setText(table.getValueAt(row, 2).toString());
-        
-        // Disable combo boxes as they form the primary key
-        cmbStudentID.setEnabled(false);
-        cmbCourseID.setEnabled(false);
-    }
-    
-    /**
-     * Clears all input fields
-     */
-    private void clearFields() {
-        cmbStudentID.setSelectedItem("");
-        cmbCourseID.setSelectedItem("");
-        txtScore.setText("");
-        
-        // Re-enable combo boxes
-        cmbStudentID.setEnabled(true);
-        cmbCourseID.setEnabled(true);
-        
-        table.clearSelection();
-    }
-    
-    /**
-     * Loads (or re-loads) data into the Student and Course combo boxes
-     */
+    // === 加载下拉框 ===
     private void loadComboBoxData() {
-        // Clear existing items
         cmbStudentID.removeAllItems();
+        try (ResultSet rs = DBHelper.executeQuery("SELECT stuID FROM Students")) {
+            while (rs.next()) cmbStudentID.addItem(rs.getString("stuID"));
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Error loading students: " + e.getMessage());
+        }
+
         cmbCourseID.removeAllItems();
-        
-        // Load student IDs
-        ArrayList<Student> students = studentManager.getAllStudents();
-        for (Student s : students) {
-            cmbStudentID.addItem(s.getStuID());
+        try (ResultSet rs = DBHelper.executeQuery("SELECT courseID FROM Courses")) {
+            while (rs.next()) cmbCourseID.addItem(rs.getString("courseID"));
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Error loading courses: " + e.getMessage());
         }
-        
-        // Load course IDs
-        ArrayList<Course> courses = courseManager.getAllCourses();
-        for (Course c : courses) {
-            cmbCourseID.addItem(c.getCourseID());
-        }
-        
-        clearFields();
     }
 
-    /**
-     * Loads a given list of grades into the table
-     * @param grades The list of grades to display
-     */
-    private void loadTableData(ArrayList<Grade> grades) {
-        tableModel.setRowCount(0); // Clear table
-        
-        if (grades.isEmpty()) {
-            return;
+    // === 加载成绩表 ===
+    private void loadTableData() {
+        tableModel.setRowCount(0);
+        try (ResultSet rs = DBHelper.executeQuery("SELECT * FROM Grades")) {
+            while (rs.next()) {
+                tableModel.addRow(new Object[]{
+                    rs.getString("stuID"),
+                    rs.getString("courseID"),
+                    rs.getDouble("score")
+                });
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Error loading grades: " + e.getMessage());
         }
-        
-        for (Grade g : grades) {
-            tableModel.addRow(new Object[]{
-                g.getStuID(),
-                g.getCourseID(),
-                g.getScore()
-            });
-        }
-    }
-    
-    /**
-     * Validates the input fields
-     * @return true if valid, false otherwise
-     */
-    private boolean validateInput() {
-        if (cmbStudentID.getSelectedItem() == null || cmbStudentID.getSelectedItem().toString().trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Student ID cannot be empty!", "Input Error", JOptionPane.ERROR_MESSAGE);
-            return false;
-        }
-        if (cmbCourseID.getSelectedItem() == null || cmbCourseID.getSelectedItem().toString().trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Course ID cannot be empty!", "Input Error", JOptionPane.ERROR_MESSAGE);
-            return false;
-        }
-        if (txtScore.getText().trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Score cannot be empty!", "Input Error", JOptionPane.ERROR_MESSAGE);
-            return false;
-        }
-        return true;
     }
 
+    // === 添加成绩 ===
     private void addGrade() {
-        if (!validateInput()) return;
-        
-        try {
-            Grade grade = new Grade(
-                cmbStudentID.getSelectedItem().toString().trim(),
-                cmbCourseID.getSelectedItem().toString().trim(),
-                Double.parseDouble(txtScore.getText().trim())
-            );
-            
-            if (gradeManager.add(grade)) {
-                loadTableData(gradeManager.getAllGrades());
-                clearFields();
-                JOptionPane.showMessageDialog(this, "Grade added successfully!", 
-                    "Success", JOptionPane.INFORMATION_MESSAGE);
-            } else {
-                 JOptionPane.showMessageDialog(this, "Failed to add grade. Record may already exist.", 
-                    "Error", JOptionPane.ERROR_MESSAGE);
-            }
-        } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(this, "Score must be a valid number!", 
-                "Input Error", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-    
-    // --- (这是您被切断的方法的完整版本) ---
-    private void updateGrade() {
-        if (table.getSelectedRow() == -1) {
-            JOptionPane.showMessageDialog(this, "Please select a grade to update!", 
-                "Warning", JOptionPane.WARNING_MESSAGE);
+        String stuID = (String) cmbStudentID.getSelectedItem();
+        String courseID = (String) cmbCourseID.getSelectedItem();
+        String scoreStr = txtScore.getText().trim();
+        if (stuID == null || courseID == null || scoreStr.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please fill all fields.");
             return;
         }
-        
-        if (!validateInput()) return;
-        
         try {
-            Grade grade = new Grade(
-                cmbStudentID.getSelectedItem().toString().trim(), // This will be from the disabled field
-                cmbCourseID.getSelectedItem().toString().trim(), // This will be from the disabled field
-                Double.parseDouble(txtScore.getText().trim())
-            );
-            
-            if (gradeManager.update(grade)) {
-                loadTableData(gradeManager.getAllGrades());
-                clearFields();
-                JOptionPane.showMessageDialog(this, "Grade updated successfully!", 
-                    "Success", JOptionPane.INFORMATION_MESSAGE);
-            } else {
-                JOptionPane.showMessageDialog(this, "Failed to update grade. Record not found.", 
-                    "Error", JOptionPane.ERROR_MESSAGE);
-            }
-        } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(this, "Score must be a valid number!", 
-                "Input Error", JOptionPane.ERROR_MESSAGE);
+            double score = Double.parseDouble(scoreStr);
+            String sql = "INSERT INTO Grades (stuID, courseID, score) VALUES (?, ?, ?)";
+            PreparedStatement pstmt = DBHelper.prepareStatement(sql);
+            pstmt.setString(1, stuID);
+            pstmt.setString(2, courseID);
+            pstmt.setDouble(3, score);
+            pstmt.executeUpdate();
+            JOptionPane.showMessageDialog(this, "Grade added successfully!");
+            loadTableData();
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Error adding grade: " + e.getMessage());
         }
     }
 
-    private void deleteGrade() {
-        if (table.getSelectedRow() == -1) {
-            JOptionPane.showMessageDialog(this, "Please select a grade to delete!", 
-                "Warning", JOptionPane.WARNING_MESSAGE);
+    // === 修改成绩 ===
+    private void updateGrade() {
+        String stuID = (String) cmbStudentID.getSelectedItem();
+        String courseID = (String) cmbCourseID.getSelectedItem();
+        String scoreStr = txtScore.getText().trim();
+        if (stuID == null || courseID == null || scoreStr.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please fill all fields.");
             return;
         }
-        
-        int confirm = JOptionPane.showConfirmDialog(this, "Are you sure you want to delete this grade record?", 
-            "Confirm Deletion", JOptionPane.YES_NO_OPTION);
-            
+        try {
+            double score = Double.parseDouble(scoreStr);
+            String sql = "UPDATE Grades SET score = ? WHERE stuID = ? AND courseID = ?";
+            PreparedStatement pstmt = DBHelper.prepareStatement(sql);
+            pstmt.setDouble(1, score);
+            pstmt.setString(2, stuID);
+            pstmt.setString(3, courseID);
+            pstmt.executeUpdate();
+            JOptionPane.showMessageDialog(this, "Grade updated successfully!");
+            loadTableData();
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Error updating grade: " + e.getMessage());
+        }
+    }
+
+    // === 删除成绩 ===
+    private void deleteGrade() {
+        int row = table.getSelectedRow();
+        if (row < 0) {
+            JOptionPane.showMessageDialog(this, "Please select a row to delete.");
+            return;
+        }
+        String stuID = tableModel.getValueAt(row, 0).toString();
+        String courseID = tableModel.getValueAt(row, 1).toString();
+        int confirm = JOptionPane.showConfirmDialog(this, "Confirm delete?", "Delete", JOptionPane.YES_NO_OPTION);
         if (confirm == JOptionPane.YES_OPTION) {
-            String stuId = cmbStudentID.getSelectedItem().toString();
-            String courseId = cmbCourseID.getSelectedItem().toString();
-            String compositeId = stuId + "-" + courseId;
-            
-            if (gradeManager.delete(compositeId)) {
-                loadTableData(gradeManager.getAllGrades());
-                clearFields();
-                JOptionPane.showMessageDialog(this, "Grade deleted successfully!", 
-                    "Success", JOptionPane.INFORMATION_MESSAGE);
-            } else {
-                JOptionPane.showMessageDialog(this, "Failed to delete grade. Record not found.", 
-                    "Error", JOptionPane.ERROR_MESSAGE);
+            try {
+                String sql = "DELETE FROM Grades WHERE stuID = ? AND courseID = ?";
+                PreparedStatement pstmt = DBHelper.prepareStatement(sql);
+                pstmt.setString(1, stuID);
+                pstmt.setString(2, courseID);
+                pstmt.executeUpdate();
+                JOptionPane.showMessageDialog(this, "Grade deleted successfully!");
+                loadTableData();
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this, "Error deleting grade: " + e.getMessage());
             }
         }
     }
-    
-    private void searchGrade() {
-        if (!validateInput()) return;
-        
-        String stuId = cmbStudentID.getSelectedItem().toString().trim();
-        String courseId = cmbCourseID.getSelectedItem().toString().trim();
-        String compositeId = stuId + "-" + courseId;
-        
-        Grade g = gradeManager.search(compositeId);
-        
-        if (g != null) {
-            // Load this single grade into the table
-            ArrayList<Grade> result = new ArrayList<>();
-            result.add(g);
-            loadTableData(result);
-            
-            // Fill fields
-            cmbStudentID.setSelectedItem(g.getStuID());
-            cmbCourseID.setSelectedItem(g.getCourseID());
-            txtScore.setText(String.valueOf(g.getScore()));
-            
-        } else {
-            JOptionPane.showMessageDialog(this, "Grade record not found.", 
-                "Not Found", JOptionPane.INFORMATION_MESSAGE);
-        }
-    }
-    
+
+    // === 按学生过滤 ===
     private void filterByStudent() {
-        if (cmbStudentID.getSelectedItem() == null || cmbStudentID.getSelectedItem().toString().trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Please select or enter a Student ID to filter by.", "Input Error", JOptionPane.ERROR_MESSAGE);
-            return;
+        String stuId = JOptionPane.showInputDialog(this, "Enter Student ID to filter:");
+        if (stuId == null || stuId.trim().isEmpty()) return;
+
+        tableModel.setRowCount(0);
+        try (PreparedStatement pstmt = DBHelper.prepareStatement("SELECT * FROM Grades WHERE stuID = ?")) {
+            pstmt.setString(1, stuId.trim());
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+                tableModel.addRow(new Object[]{
+                    rs.getString("stuID"),
+                    rs.getString("courseID"),
+                    rs.getDouble("score")
+                });
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Error filtering by student: " + e.getMessage());
         }
-        String stuId = cmbStudentID.getSelectedItem().toString().trim();
-        loadTableData(gradeManager.getGradesByStudent(stuId));
     }
-    
+
+    // === 按课程过滤 ===
     private void filterByCourse() {
-         if (cmbCourseID.getSelectedItem() == null || cmbCourseID.getSelectedItem().toString().trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Please select or enter a Course ID to filter by.", "Input Error", JOptionPane.ERROR_MESSAGE);
-            return;
+        String courseId = JOptionPane.showInputDialog(this, "Enter Course ID to filter:");
+        if (courseId == null || courseId.trim().isEmpty()) return;
+
+        tableModel.setRowCount(0);
+        try (PreparedStatement pstmt = DBHelper.prepareStatement("SELECT * FROM Grades WHERE courseID = ?")) {
+            pstmt.setString(1, courseId.trim());
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) {
+                tableModel.addRow(new Object[]{
+                    rs.getString("stuID"),
+                    rs.getString("courseID"),
+                    rs.getDouble("score")
+                });
+            }
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Error filtering by course: " + e.getMessage());
         }
-        String courseId = cmbCourseID.getSelectedItem().toString().trim();
-        loadTableData(gradeManager.getGradesByCourse(courseId));
     }
 }
